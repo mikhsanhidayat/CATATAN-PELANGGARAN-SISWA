@@ -18,7 +18,7 @@ withDefaults(defineProps<Props>(), {
 <template>
     <AppShell variant="sidebar">
         <AppSidebar />
-        <AppContent variant="sidebar" class="min-w-0 overflow-x-clip">
+        <AppContent variant="sidebar" class="min-w-0 overflow-x-clip bg-[#f6f8fb] dark:bg-neutral-950 min-h-screen">
             <AppSidebarHeader :breadcrumbs="breadcrumbs" />
             <slot />
         </AppContent>

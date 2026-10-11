@@ -152,9 +152,102 @@ Alur pemrosesan data saat halaman `/users` dibuka:
 - Data dummy ada di `const dummyRows` di dalam `<script setup>` — mudah diganti dengan props Inertia saat fitur data asli siap
 - Label badge "Data contoh" ditambahkan agar jelas bahwa ini bukan data real
 
-#### Hasil Build
-```
-✓ 3368 modules transformed.
-✓ built in 1.78s   — 0 error, 0 warning
-```
+---
+
+### Sesi 2026-10-10 — Manajemen Pengguna, Stored Procedure, Debugging Hydration Mismatch & Refactoring UI Dashboard
+
+#### 1. Implementasi Manajemen Pengguna (`GET /users`)
+- **Backend (`UserManagementController.php`)**:
+  - Mengambil data statistik pengguna melalui Stored Procedure: `EXEC dbo.sp_dash_users @bagian = 'card'`.
+  - Mengambil daftar pengguna dengan filter dan pencarian: `EXEC dbo.sp_dash_users @bagian = 'list', @cari = ?, @id_role = ?`.
+  - Mengambil opsi dropdown role dari view/tabel `dbo.pilihan_role`.
+- **Frontend (`resources/js/pages/users/Index.vue`)**:
+  - Menampilkan 4 kartu statistik pengguna (`KartuStatistikUsers.vue`).
+  - Search bar dengan *debounce 400ms* dan dropdown filter role (`TabelUsers.vue`).
+  - Search dan Filter Role dapat dikombinasikan bersamaan tanpa menghilangkan state.
+
+#### 2. Debugging Report: Penyelesaian Masalah Double Render (Hydration Mismatch)
+- **Gejala:** Tampilan halaman `/users` muncul 2 kali (double render), terutama saat hard refresh (`Ctrl + Shift + R`). Terdapat pesan warning di browser: `[Vue warn]: Hydration children mismatch. Server rendered element contains more child nodes than client vdom`.
+- **Akar Masalah:** Pada file `resources/js/components/NavMain.vue`, struktur submenu Data Master sebelumnya dibungkus tag `<div>` yang langsung berisi `SidebarMenuItem`. Karena `SidebarMenuItem` menghasilkan tag `<li>`, ini menyebabkan struktur HTML tidak valid (`<li>` sebagai anak langsung dari `<div>`) dan memicu kegagalan hydration DOM browser.
+- **Solusi Permanen:**
+  - Menambahkan import `SidebarMenuSub`, `SidebarMenuSubItem`, dan `SidebarMenuSubButton` dari `@/components/ui/sidebar`.
+  - Mengganti tag pembungkus `<div>` menjadi `SidebarMenuSub` dan menggunakan `SidebarMenuSubItem` + `SidebarMenuSubButton`. Struktur DOM menjadi semantik yang valid (`<ul>` dan `<li>`).
+  - Menghapus folder sementara `public/build` dari dev environment agar tidak terjadi konflik cache.
+
+#### 3. Refactoring UI Menyeluruh Dashboard Admin
+- **Header Atas (`AppSidebarHeader.vue`)**: Ditambahkan search bar tipis berlatar `bg-slate-100 dark:bg-neutral-800` di sisi kiri, serta tombol aksi (Theme toggle, Settings, Notifikasi dengan dot badge merah) di sisi kanan.
+- **Menu Sidebar (`NavMain.vue`)**: Styling menu aktif diubah menjadi tema lembut ramah pengguna: latar belakang `bg-blue-50 dark:bg-blue-950/40`, teks & ikon `text-blue-700 dark:text-blue-400 font-semibold`, dan sudut membulat `rounded-lg`.
+- **Top Stat Cards (`KartuStatistik.vue`)**: Mengadopsi tata letak referensi modern (4 Card: Total Kasus, Selesai Dibina, Surat Panggilan dengan badge Rose `Perlu Tindakan`, dan Tingkat Ketertiban dengan badge Emerald).
+- **Area Kiri (Main Chart & Table)**:
+  - `GrafikKetertiban.vue`: Judul *"Tren Kasus Pelanggaran & Pembinaan"*, filter waktu (Semua, Harian, Bulanan, Tahunan), ringkasan data statistik di atas grafik, dan kurva SVG dual-line (Biru `#2563eb` & Hijau `#10b981`).
+  - `TabelPelanggaranTerbaru.vue`: Judul *"Pelanggaran Terbaru"*, avatar lingkaran inisial, kelas, pelanggaran, poin, dan badge status semantik (Emerald, Amber, Rose).
+- **Area Kanan (Side Lists)**:
+  - `StatistikTindakLanjut.vue`: Meniru *"Active Project"* dengan progress bar tipis warna-warni berdasarkan kategori status.
+  - `SiswaPelanggarTerbanyak.vue`: Meniru *"Top Customer"* menampilkan 5 siswa pelanggar terbanyak dilengkapi avatar dan badge poin rose.
+- **Halaman Utama (`Dashboard.vue`)**: Dirakit menjadi tata letak 2-kolom responsif (`lg:col-span-8` & `lg:col-span-4`) dengan background `bg-slate-50 dark:bg-neutral-950`.
+
+---
+
+## 7. Instruksi & Aturan Ketat untuk AI Agent
+
+1. **Struktur Submenu `NavMain.vue`:** DILARANG mengembalikan struktur submenu ke tag `<div>` yang langsung membungkus `SidebarMenuItem`. Tetap gunakan `SidebarMenuSub`, `SidebarMenuSubItem`, dan `SidebarMenuSubButton` agar terhindar dari hydration mismatch.
+2. **Layout Halaman:** DILARANG menambahkan `defineOptions({ layout: { breadcrumbs: [...] } })` pada file komponen halaman Vue. Layout aplikasi sudah dikelola terpusat via `resources/js/app.ts`.
+3. **Aturan Database & Query:** Seluruh query pengolahan data, filter, agregasi, dan CRUD pada prinsipnya wajib dikerjakan melalui **SQL Server View dan Stored Procedure**. Laravel Controller hanya menangani validasi, pemanggilan prosedur, dan pengiriman data ke Inertia.
+4. **Keamanan Database:** DILARANG menjalankan `php artisan migrate:fresh`, drop tabel, atau menghapus data riil yang ada di database.
+5. **Workflow Konfirmasi:** Selalu jelaskan rencana perubahan terlebih dahulu dan minta konfirmasi (Ya/Tidak) kepada pengguna sebelum mengeksekusi modifikasi file.
+6. **Development Server:** Jalankan pengembangan menggunakan `composer run dev` atau kombinasi `php artisan serve` & `npm run dev`. Hindari menjalankan `npm run build` selama proses development lokal.
+
+---
+
+### Sesi 2026-10-11 — Implementasi Fitur Detail Pengguna (`GET /users/{id_users}`) & Penyempurnaan UI
+
+#### 1. Implementasi Backend Route & Controller
+- **Routing (`routes/web.php`)**:
+  - Menambahkan endpoint `Route::get('users/{id_users}', [UserManagementController::class, 'show'])->name('users.show')->whereNumber('id_users');`
+- **Controller (`UserManagementController.php`)**:
+  - Menambahkan method `show(Request $request, int $id_users)`:
+    - Otorisasi hak akses ketat Admin via `abort_unless(..., 403)`.
+    - Memanggil Stored Procedure SQL Server: `EXEC dbo.sp_dash_users @bagian = 'detail', @id_users = ?`. Jika tidak ditemukan me-return HTTP 404.
+    - Memanggil Stored Procedure SQL Server: `EXEC dbo.sp_dash_users @bagian = 'riwayat', @id_users = ?`.
+    - Mengirim props `user` dan `riwayat` ke komponen Inertia `users/Show`.
+
+#### 2. Aktivasi Aksi pada Tabel Pengguna
+- **Frontend (`resources/js/components/Users/TabelUsers.vue`)**:
+  - Mengubah aksi tombol "Detail" menjadi komponen `<Link :href="`/users/${user.id_users}`">Detail</Link>` dari `@inertiajs/vue3`.
+
+#### 3. Pembuatan & Refactoring Halaman Detail Pengguna (`resources/js/pages/users/Show.vue`)
+- Mengadopsi secara presisi layout dan styling dari gambar referensi UI:
+  - **Header & Breadcrumbs**: Menggunakan icon pembatas `<ChevronRight class="h-3 w-3" />` (`Data Master > Users > Detail Pengguna`), tombol `Kembali`, dan tombol `Edit Pengguna` (disabled).
+  - **Card Informasi Pengguna (Kiri 8 col)**:
+    - Avatar berbentuk lingkaran bulat penuh (`rounded-full bg-blue-100 text-blue-600`) dengan inisial dua huruf kapital.
+    - Badge Role (`Admin`) berbentuk *pill* latar biru transparan halus dan Badge Status Aktif dengan dot hijau.
+    - Grid 8 field data diri dengan ikon presisi: Nama Pengguna, Email, Nomor HP, Jenis Kelamin, Tempat Lahir, Tanggal Lahir (`YYYY-MM-DD`), Alamat Lengkap, dan Role.
+  - **Card Informasi Akun & Ringkasan Jabatan (Kanan 4 col)**:
+    - Masing-masing baris dilengkapi ikon di samping kiri label (ID User, Dibuat Pada, Dibuat Oleh, Email Verified dengan badge centang hijau "Ya", Status Akun dengan dot hijau "Aktif").
+    - Ringkasan Jabatan menampilkan Jabatan Terakhir, Tahun Ajaran Aktif, dan Total Riwayat Jabatan.
+  - **Card Riwayat Jabatan (Kiri 8 col)**:
+    - Tabel minimalis bersih tanpa strip tebal: No, Tahun Ajaran, Jabatan, Tanggal Mulai, Tanggal Selesai, dan Status.
+    - Status jabatan aktif ditandai dot hijau "Aktif", sedangkan riwayat selesai ditandai dot abu-abu "Selesai".
+    - Tersedia *Empty State* informatif jika pengguna belum memiliki riwayat jabatan.
+  - **Card Aktivitas / Audit (Kanan 4 col)**:
+    - Timeline vertical dengan titik bulat biru solid dan layout horizontal rata kanan (Akun dibuat, Terakhir diperbarui, Terakhir login).
+  - Menggunakan `isCurrentOrParentUrl(child.href)` pada submenu agar menu `Data Master > Users` tetap menyala aktif saat membuka URL detail `/users/:id`.
+
+#### 4. Implementasi Fitur Edit Pengguna, Hapus Pengguna (Soft Delete), & Activity Log
+- **Routing (`routes/web.php`)**:
+  - `PUT /users/{id_users}` (`users.update`): Handler update data profil & password opsional.
+  - `DELETE /users/{id_users}` (`users.destroy`): Handler soft-delete pengguna.
+- **Backend Controller (`UserManagementController.php`)**:
+  - `show()`: Mengambil list activity via `EXEC dbo.sp_dash_users @bagian = 'activity', @id_users = ?` dan dropdown role dari `dbo.pilihan_role`.
+  - `update()`: Validasi request, hashing password jika diisi, eksekusi SP `@bagian = 'update'`. SQL Server secara atomik mencatat perubahan ke `dbo.activity_log`.
+  - `destroy()`: Proteksi self-delete di level controller, eksekusi SP `@bagian = 'delete'`, redirect ke `users.index` dengan toast notifikasi.
+- **Proteksi Autentikasi (`EnsureUserIsActive.php` & `FortifyServiceProvider.php`)**:
+  - `Fortify::authenticateUsing()` menolak login pengguna dengan `status_delete = 1 / true` (*"Akun Anda sudah dinonaktifkan"*).
+  - Middleware `EnsureUserIsActive` mengecek setiap request pengguna terotentikasi dan langsung me-logout sesi jika akun telah dinonaktifkan/dihapus.
+- **Frontend Komponen (`ModalEditUser.vue` & `Show.vue`)**:
+  - `ModalEditUser.vue`: Form modal 2 kolom terisi data profil aktual pengguna, input password baru opsional dengan konfirmasi, error mapping field, dan state loading.
+  - `Show.vue`: Mengaktifkan tombol Edit, menambahkan tombol & dialog konfirmasi Hapus (disabled jika akun sendiri), serta merender **Card Aktivitas / Audit** secara kronologis (terbaru ke terlama) lengkap dengan perbandingan diff field (`sebelum -> sesudah`) dan badge *"Password diperbarui"* tanpa mengekspos hash password.
+
+
+
 

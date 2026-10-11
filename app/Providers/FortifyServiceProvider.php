@@ -17,6 +17,10 @@ use Inertia\Inertia;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
+
 class FortifyServiceProvider extends ServiceProvider
 {
     /**
@@ -35,6 +39,29 @@ class FortifyServiceProvider extends ServiceProvider
         $this->configureActions();
         $this->configureViews();
         $this->configureRateLimiting();
+
+        // Proteksi autentikasi: hanya pengguna aktif (status_delete = 0 / false) yang diizinkan login
+        Fortify::authenticateUsing(function (Request $request) {
+            $user = User::where('email', $request->email)->first();
+
+            if (! $user) {
+                return null;
+            }
+
+            // Jika akun sudah dinonaktifkan (status_delete = 1 / true)
+            $isDeleted = $user->status_delete === true || $user->status_delete === 1 || $user->status_delete === '1';
+            if ($isDeleted) {
+                throw ValidationException::withMessages([
+                    Fortify::username() => 'Akun Anda sudah dinonaktifkan. Silakan hubungi Administrator.',
+                ]);
+            }
+
+            if (Hash::check($request->password, $user->password)) {
+                return $user;
+            }
+
+            return null;
+        });
     }
 
     /**

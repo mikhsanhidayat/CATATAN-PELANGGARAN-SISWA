@@ -1,6 +1,21 @@
+
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, LayoutGrid } from '@lucide/vue';
+import {
+    BookOpen,
+    Users,
+    AlertTriangle,
+    FileText,
+    Settings,
+    LayoutGrid,
+    Database,
+    ShieldCheck,
+    BriefcaseBusiness,
+    CalendarDays,
+    GraduationCap,
+    School,
+    ListChecks,
+} from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -17,24 +32,57 @@ import {
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
+type MenuItem = NavItem & {
+    children?: NavItem[];
+};
+
+const mainNavItems: MenuItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
     },
+    {
+        title: 'Data Master',
+        href: '#',
+        icon: Database,
+        children: [
+            { title: 'Users', href: '/users', icon: Users },
+            { title: 'Role', href: '#', icon: ShieldCheck },
+            { title: 'Jabatan', href: '#', icon: BriefcaseBusiness },
+            { title: 'Tahun Ajaran', href: '#', icon: CalendarDays },
+            { title: 'Jurusan', href: '#', icon: GraduationCap },
+            { title: 'Kelas', href: '#', icon: School },
+            { title: 'Jenis Pelanggaran', href: '#', icon: ListChecks },
+        ],
+    },
+    {
+        title: 'Data Siswa',
+        href: '#',
+        icon: Users,
+    },
+    {
+        title: 'Catat Pelanggaran',
+        href: '#',
+        icon: AlertTriangle,
+    },
+    {
+        title: 'Data Pelanggaran',
+        href: '#',
+        icon: BookOpen,
+    },
+    {
+        title: 'Laporan',
+        href: '#',
+        icon: FileText,
+    },
 ];
 
 const footerNavItems: NavItem[] = [
     {
-        title: 'Repository',
-        href: 'https://github.com/laravel/vue-starter-kit',
-        icon: FolderGit2,
-    },
-    {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#vue',
-        icon: BookOpen,
+        title: 'Pengaturan',
+        href: '/settings/profile',
+        icon: Settings,
     },
 ];
 </script>
@@ -52,15 +100,12 @@ const footerNavItems: NavItem[] = [
                 </SidebarMenuItem>
             </SidebarMenu>
         </SidebarHeader>
-
         <SidebarContent>
             <NavMain :items="mainNavItems" />
         </SidebarContent>
-
         <SidebarFooter>
             <NavFooter :items="footerNavItems" />
             <NavUser />
         </SidebarFooter>
     </Sidebar>
-    <slot />
 </template>
